@@ -269,14 +269,13 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
   bool _isChatNearBottom() {
     if (!_chatScrollController.hasClients) return true;
     final position = _chatScrollController.position;
-    return position.maxScrollExtent - position.pixels <= 160;
+    return position.pixels <= 160;
   }
 
   void _scheduleScrollToBottom({bool stabilize = false}) {
     void jump() {
       if (!_chatScrollController.hasClients) return;
-      final position = _chatScrollController.position;
-      _chatScrollController.jumpTo(position.maxScrollExtent);
+      _chatScrollController.jumpTo(0);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       jump();
@@ -285,6 +284,11 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
         Future<void>.delayed(const Duration(milliseconds: 250), jump);
       }
     });
+  }
+
+  void _resetChatScrollPosition() {
+    if (!_chatScrollController.hasClients) return;
+    _chatScrollController.jumpTo(0);
   }
 
   String get _deviceType => Platform.isWindows ? 'pc' : 'phone';
@@ -1354,6 +1358,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
   IconData _iconOf(String type) => type == 'pc' ? Icons.desktop_windows_rounded : type == 'group' ? Icons.groups_rounded : Icons.smartphone_rounded;
 
   Future<void> _openMobileChat(String id) async {
+    _resetChatScrollPosition();
     setState(() {
       _selectedTargetId = id;
       _unread.remove(id);
@@ -1435,6 +1440,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
         title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 12), overflow: TextOverflow.ellipsis),
         onTap: () {
+          _resetChatScrollPosition();
           setState(() {
             _selectedTargetId = id;
             _unread.remove(id);
@@ -1477,7 +1483,13 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
               Expanded(
                 child: messages.isEmpty
                     ? const Center(child: Text('发送第一条消息，局域网内设备会自动互通'))
-                    : ListView.builder(controller: _chatScrollController, padding: const EdgeInsets.all(18), itemCount: messages.length, itemBuilder: (context, index) => _messageBubble(messages[index])),
+                    : ListView.builder(
+                        controller: _chatScrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.all(18),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) => _messageBubble(messages[messages.length - 1 - index]),
+                      ),
               ),
               _buildComposer(),
             ],
@@ -1782,7 +1794,13 @@ class _MobileChatPageState extends State<_MobileChatPage> {
             Expanded(
               child: messages.isEmpty
                   ? const Center(child: Text('发送第一条消息'))
-                  : ListView.builder(controller: state._chatScrollController, padding: const EdgeInsets.all(18), itemCount: messages.length, itemBuilder: (context, index) => state._messageBubble(messages[index])),
+                  : ListView.builder(
+                      controller: state._chatScrollController,
+                      reverse: true,
+                      padding: const EdgeInsets.all(18),
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) => state._messageBubble(messages[messages.length - 1 - index]),
+                    ),
             ),
             state._buildComposer(),
           ],
