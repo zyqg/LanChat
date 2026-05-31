@@ -264,14 +264,26 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
     for (final listener in List<VoidCallback>.from(_mobileChatListeners)) {
       listener();
     }
-    _scheduleScrollToBottom();
   }
 
-  void _scheduleScrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  bool _isChatNearBottom() {
+    if (!_chatScrollController.hasClients) return true;
+    final position = _chatScrollController.position;
+    return position.maxScrollExtent - position.pixels <= 160;
+  }
+
+  void _scheduleScrollToBottom({bool stabilize = false}) {
+    void jump() {
       if (!_chatScrollController.hasClients) return;
       final position = _chatScrollController.position;
       _chatScrollController.jumpTo(position.maxScrollExtent);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      jump();
+      if (stabilize) {
+        Future<void>.delayed(const Duration(milliseconds: 80), jump);
+        Future<void>.delayed(const Duration(milliseconds: 250), jump);
+      }
     });
   }
 
@@ -295,6 +307,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     if (Platform.isWindows) windowManager.removeListener(this);
     _messageController.dispose();
+    _chatScrollController.dispose();
     _stopNetworking();
     super.dispose();
   }
@@ -720,9 +733,10 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
       _updateTransferStatus(message.transferId, 'rejected');
       return;
     }
+    final sessionId = message.targetId == groupId ? groupId : message.senderId;
+    final shouldFollow = _selectedTargetId == sessionId && _isChatNearBottom();
     setState(() {
       _messages.add(message);
-      final sessionId = message.targetId == groupId ? groupId : message.senderId;
       if (_selectedTargetId != sessionId) {
         _unread[sessionId] = (_unread[sessionId] ?? 0) + 1;
         final preview = message.type == 'image' ? '[图片]' : message.text ?? '[新消息]';
@@ -730,6 +744,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
         unawaited(_showWindowsNotification(message.senderName, preview, sessionId: sessionId));
       }
     });
+    if (shouldFollow) _scheduleScrollToBottom(stabilize: message.type == 'image');
   }
 
   void _onIncomingFileRequest(WireMessage message) {
@@ -751,13 +766,15 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
       transferId: message.transferId,
       transferStatus: 'pending',
     );
+    final sessionId = message.senderId;
+    final shouldFollow = _selectedTargetId == sessionId && _isChatNearBottom();
     setState(() {
       _messages.add(bubble);
-      final sessionId = message.senderId;
       if (_selectedTargetId != sessionId) {
         _unread[sessionId] = (_unread[sessionId] ?? 0) + 1;
       }
     });
+    if (shouldFollow) _scheduleScrollToBottom();
     final preview = '请求发送文件：${message.fileName}';
     _startTrayBlink('${message.senderName}: $preview');
     unawaited(_showWindowsNotification(message.senderName, preview, sessionId: message.senderId));
@@ -901,6 +918,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
       localPath: localPath,
     );
     setState(() => _messages.add(bubble));
+    _scheduleScrollToBottom();
     await _sendMessage(WireMessage(
       id: messageId,
       senderId: _deviceId,
@@ -953,6 +971,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
       localPath: path,
     );
     setState(() => _messages.add(bubble));
+    if (_selectedTargetId == targetId) _scheduleScrollToBottom();
     await _sendMessage(WireMessage(
       id: messageId,
       senderId: _deviceId,
@@ -1010,6 +1029,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
         _seenMessageIds.add(message.id);
         _messages.add(message);
       });
+      _scheduleScrollToBottom(stabilize: message.type == 'image');
     }
     final targets = message.targetId == groupId ? _peers.values.toList() : [_peers[message.targetId]].whereType<Peer>().toList();
     if (targets.isEmpty) {
@@ -1338,6 +1358,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
       _selectedTargetId = id;
       _unread.remove(id);
     });
+    _scheduleScrollToBottom(stabilize: true);
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => _MobileChatPage(host: this)));
   }
 
@@ -1418,6 +1439,7 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
             _selectedTargetId = id;
             _unread.remove(id);
           });
+          _scheduleScrollToBottom(stabilize: true);
           if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) Navigator.pop(context);
         },
       ),
