@@ -1509,44 +1509,105 @@ class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver
   Widget _messageBubble(WireMessage message) {
     final mine = message.senderId == _deviceId;
     final bubbleColor = mine ? const Color(0xFFDCF8C6) : const Color(0xFFF3F6FB);
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Column(
-            crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              Text(mine ? '我' : message.senderName, style: const TextStyle(fontSize: 12, color: Colors.black45, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              DecoratedBox(
-                decoration: BoxDecoration(color: bubbleColor, borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(mine ? 18 : 4), bottomRight: Radius.circular(mine ? 4 : 18))),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: message.type == 'image' && message.bytes != null
-                      ? GestureDetector(
-                          onTap: () => unawaited(_openImageMessage(message)),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.memory(
-                              message.bytes!,
-                              key: ValueKey(message.id),
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
-                            ),
-                          ),
-                        )
-                      : message.type == 'file' || message.type == 'file_request'
-                          ? _fileCard(message)
-                      : _buildTextSpan(message.text ?? '', mine),
-                ),
-              ),
-            ],
+    final bubble = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: Column(
+        crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Text(mine ? '我' : message.senderName, style: const TextStyle(fontSize: 12, color: Colors.black45, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          DecoratedBox(
+            decoration: BoxDecoration(color: bubbleColor, borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(mine ? 18 : 4), bottomRight: Radius.circular(mine ? 4 : 18))),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: message.type == 'image' && message.bytes != null
+                  ? GestureDetector(
+                      onTap: () => unawaited(_openImageMessage(message)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          message.bytes!,
+                          key: ValueKey(message.id),
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                        ),
+                      ),
+                    )
+                  : message.type == 'file' || message.type == 'file_request'
+                      ? _fileCard(message)
+                  : _buildTextSpan(message.text ?? '', mine),
+            ),
           ),
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Padding(
+        padding: EdgeInsets.only(left: mine ? 54 : 0, right: mine ? 0 : 54),
+        child: Row(
+          mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: mine
+              ? [Flexible(child: bubble), const SizedBox(width: 10), _messageAvatar(message)]
+              : [_messageAvatar(message), const SizedBox(width: 10), Flexible(child: bubble)],
         ),
       ),
     );
+  }
+
+  Widget _messageAvatar(WireMessage message) {
+    final mine = message.senderId == _deviceId;
+    final name = mine ? _deviceName : message.senderName;
+    final type = mine ? _deviceType : (_peers[message.senderId]?.deviceType ?? 'phone');
+    return SizedBox(
+      width: 40,
+      height: 44,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _avatarColorFor(message.senderId),
+            child: Text(_avatarLetter(name), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+          ),
+          Positioned(
+            right: -2,
+            bottom: 0,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE3E8F2))),
+              child: Icon(_iconOf(type), size: 12, color: const Color(0xFF4D5D78)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _avatarColorFor(String id) {
+    const colors = [
+      Color(0xFF4F7BFF),
+      Color(0xFF00A6A6),
+      Color(0xFFF59E0B),
+      Color(0xFFEF4444),
+      Color(0xFF8B5CF6),
+      Color(0xFF10B981),
+      Color(0xFFEC4899),
+      Color(0xFF64748B),
+    ];
+    var hash = 0;
+    for (final codeUnit in id.codeUnits) {
+      hash = (hash * 31 + codeUnit) & 0x7fffffff;
+    }
+    return colors[hash % colors.length];
+  }
+
+  String _avatarLetter(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed.characters.first.toUpperCase();
   }
 
   Widget _fileCard(WireMessage message) {
